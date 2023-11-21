@@ -34,7 +34,7 @@ jobs:
           -var server_private_key=${{ secrets.SERVER_PRIVATE_KEY }} 
           -var server_public_key=${{ secrets.SERVER_PUBLIC_KEY }} 
           -var client_public_key=${{ secrets.CLIENT_PUBLIC_KEY }}
-          -var region=$$ {{ vars.AWS_REGION }}
+          -var region=${{ vars.AWS_REGION }}
           .
 
       - name: Run `packer build`
@@ -46,7 +46,7 @@ jobs:
           -var server_private_key=${{ secrets.SERVER_PRIVATE_KEY }}
           -var server_public_key=${{ secrets.SERVER_PUBLIC_KEY }}
           -var client_public_key=${{ secrets.CLIENT_PUBLIC_KEY }}
-          -var region=$$ {{ vars.AWS_REGION }}
+          -var region=${{ vars.AWS_REGION }}
           -color=false -on-error=abort .
         env:          
           AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
