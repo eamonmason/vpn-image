@@ -27,7 +27,7 @@ jobs:
           echo ${MY_PUBLIC_IP} &&
           aws ec2 modify-security-group-rules
           --group-id ${{ vars.SECURITY_GROUP_ID }}
-          --security-group-rules SecurityGroupRuleId=${{ vars.SECURITY_GROUP_RULE_ID }},SecurityGroupRule="{CidrIpv4=${MY_PUBLIC_IP},Description=GHAction,IpProtocol=tcp,ToPort=22,FromPort=22}"
+          --security-group-rules SecurityGroupRuleId=${{ vars.SECURITY_GROUP_RULE_ID }},SecurityGroupRule="{CidrIpv4=${MY_PUBLIC_IP}/32,Description=GHAction,IpProtocol=tcp,ToPort=22,FromPort=22}"
 
       - name: Setup `packer`
         uses: hashicorp/setup-packer@main
