@@ -27,10 +27,10 @@ jobs:
       - name: Run `packer validate`
         id: validate
         run: >
-          "packer validate  
-          -var vpc_id=$VPC_ID 
-          -var subnet_id=$SUBNET_ID 
-          -var security_group_id=$SECURITY_GROUP_ID 
+          "packer validate
+          -var vpc_id=${{ VPC_ID }}
+          -var subnet_id=${{ SUBNET_ID }}
+          -var security_group_id=${{ SECURITY_GROUP_ID }}
           -var server_private_key=${{ secrets.SERVER_PRIVATE_KEY }} 
           -var server_public_key=${{ secrets.SERVER_PUBLIC_KEY }} 
           -var client_public_key= ${{ secrets.CLIENT_PUBLIC_KEY }} 
@@ -40,12 +40,12 @@ jobs:
       - name: Run `packer build`
         id: build
         run: >
-          "packer build -var vpc_id=$VPC_ID 
-          -var subnet_id=$SUBNET_ID 
-          -var security_group_id=$SECURITY_GROUP_ID 
-          -var server_private_key=${{ secrets.SERVER_PRIVATE_KEY }} 
-          -var server_public_key=${{ secrets.SERVER_PUBLIC_KEY }} 
-          -var client_public_key= ${{ secrets.CLIENT_PUBLIC_KEY }} 
+          "packer build -var vpc_id=${{ VPC_ID }}
+          -var subnet_id=${{ SUBNET_ID }}
+          -var security_group_id=${{ SECURITY_GROUP_ID }}
+          -var server_private_key=${{ secrets.SERVER_PRIVATE_KEY }}
+          -var server_public_key=${{ secrets.SERVER_PUBLIC_KEY }}
+          -var client_public_key= ${{ secrets.CLIENT_PUBLIC_KEY }}
           -color=false -on-error=abort ."
         env:          
           AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
