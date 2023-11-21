@@ -39,4 +39,4 @@ jobs:
           server_public_key: "${{ secrets.SERVER_PUBLIC_KEY }}"
           client_public_key: "${{ secrets.CLIENT_PUBLIC_KEY }}"
           AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
-          AWS_SECRET_ACCESS_KEY: "${{ AWS_SECRET_ACCESS_KEY }}"
+          AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
