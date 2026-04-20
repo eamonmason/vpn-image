@@ -2,68 +2,145 @@ name: packer
 
 on:
   push:
+    branches:
+      - main
 
 env:
   PRODUCT_VERSION: "latest"
+  PRIMARY_REGION: ${{ vars.AWS_REGION }}
 
 jobs:
-  packer:
+  build-and-distribute:
     runs-on: ubuntu-latest
-    name: Run Packer
+    name: Build and distribute WireGuard AMI
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Sets ip address
-        uses: aws-actions/configure-aws-credentials@v1
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ env.PRIMARY_REGION }}
 
-      - name: Sets IP address on security group
-        run: >
-          MY_PUBLIC_IP=$(curl ifconfig.me) &&
-          echo ${MY_PUBLIC_IP} &&
-          aws ec2 modify-security-group-rules
-          --group-id ${{ vars.SECURITY_GROUP_ID }}
-          --security-group-rules SecurityGroupRuleId=${{ vars.SECURITY_GROUP_RULE_ID }},SecurityGroupRule="{CidrIpv4=${MY_PUBLIC_IP}/32,Description=GHAction,IpProtocol=tcp,ToPort=22,FromPort=22}"
+      - name: Whitelist GitHub Actions IP on build security group
+        run: |
+          MY_PUBLIC_IP=$(curl -sf https://checkip.amazonaws.com)
+          aws ec2 modify-security-group-rules \
+            --group-id ${{ vars.SECURITY_GROUP_ID }} \
+            --security-group-rules "SecurityGroupRuleId=${{ vars.SECURITY_GROUP_RULE_ID }},SecurityGroupRule={CidrIpv4=${MY_PUBLIC_IP}/32,Description=GHAction,IpProtocol=tcp,ToPort=22,FromPort=22}"
 
-      - name: Setup `packer`
+      - name: Setup packer
         uses: hashicorp/setup-packer@main
-        id: setup
         with:
           version: ${{ env.PRODUCT_VERSION }}
 
-      - name: Run `packer init`
-        id: init
-        run: "packer init ."
+      - name: Packer init
+        run: packer init .
 
-      - name: Run `packer validate`
-        id: validate
-        run: >
-          packer validate
-          -var vpc_id=${{ vars.VPC_ID }}
-          -var subnet_id=${{ vars.SUBNET_ID }}
-          -var security_group_id=${{ vars.SECURITY_GROUP_ID }}
-          -var server_private_key=${{ secrets.SERVER_PRIVATE_KEY }} 
-          -var server_public_key=${{ secrets.SERVER_PUBLIC_KEY }} 
-          -var client_public_key=${{ secrets.CLIENT_PUBLIC_KEY }}
-          -var region=${{ vars.AWS_REGION }}
-          .
+      - name: Packer validate
+        run: |
+          packer validate \
+            -var vpc_id=${{ vars.VPC_ID }} \
+            -var subnet_id=${{ vars.SUBNET_ID }} \
+            -var security_group_id=${{ vars.SECURITY_GROUP_ID }} \
+            -var server_private_key='${{ secrets.SERVER_PRIVATE_KEY }}' \
+            -var server_public_key='${{ secrets.SERVER_PUBLIC_KEY }}' \
+            -var client_public_key='${{ secrets.CLIENT_PUBLIC_KEY }}' \
+            -var region=${{ env.PRIMARY_REGION }} \
+            .
 
-      - name: Run `packer build`
-        id: build
-        run: >
-          packer build -var vpc_id=${{ vars.VPC_ID }}
-          -var subnet_id=${{ vars.SUBNET_ID }}
-          -var security_group_id=${{ vars.SECURITY_GROUP_ID }}
-          -var server_private_key=${{ secrets.SERVER_PRIVATE_KEY }}
-          -var server_public_key=${{ secrets.SERVER_PUBLIC_KEY }}
-          -var client_public_key=${{ secrets.CLIENT_PUBLIC_KEY }}
-          -var region=${{ vars.AWS_REGION }}
-          -color=false -on-error=abort .
-        env:          
-          AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
-          AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
-          AWS_REGION: "${{ vars.AWS_REGION }}"
+      - name: Packer build
+        run: |
+          packer build \
+            -var vpc_id=${{ vars.VPC_ID }} \
+            -var subnet_id=${{ vars.SUBNET_ID }} \
+            -var security_group_id=${{ vars.SECURITY_GROUP_ID }} \
+            -var server_private_key='${{ secrets.SERVER_PRIVATE_KEY }}' \
+            -var server_public_key='${{ secrets.SERVER_PUBLIC_KEY }}' \
+            -var client_public_key='${{ secrets.CLIENT_PUBLIC_KEY }}' \
+            -var region=${{ env.PRIMARY_REGION }} \
+            -color=false -on-error=abort .
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.PRIMARY_REGION }}
+
+      - name: Extract primary AMI ID and update SSM in primary region
+        run: |
+          PRIMARY_AMI_ID=$(jq -r '.builds[-1].artifact_id' manifest.json | cut -d: -f2)
+          echo "PRIMARY_AMI_ID=${PRIMARY_AMI_ID}" >> "$GITHUB_ENV"
+          echo "Primary region AMI: ${PRIMARY_AMI_ID}"
+          aws ssm put-parameter \
+            --name /vpn-wireguard/WIREGUARD_IMAGE \
+            --value "${PRIMARY_AMI_ID}" \
+            --type String \
+            --overwrite \
+            --region ${{ env.PRIMARY_REGION }}
+
+      - name: Copy AMI to all other regions in parallel
+        run: |
+          copy_ami() {
+            local region=$1
+            local ami_id
+            ami_id=$(aws ec2 copy-image \
+              --source-region ${{ env.PRIMARY_REGION }} \
+              --source-image-id "${PRIMARY_AMI_ID}" \
+              --name "wireguard-server-$(date +%Y-%m-%d-%H%M)" \
+              --region "${region}" \
+              --query ImageId --output text)
+            echo "${ami_id}" > "/tmp/ami_${region}.txt"
+            echo "Copying to ${region}: ${ami_id}"
+          }
+
+          copy_ami eu-west-2      &
+          copy_ami eu-north-1     &
+          copy_ami ap-southeast-2 &
+          copy_ami ca-central-1   &
+          copy_ami eu-west-3      &
+          wait
+
+          echo "EU_WEST_2_AMI=$(cat /tmp/ami_eu-west-2.txt)"      >> "$GITHUB_ENV"
+          echo "EU_NORTH_1_AMI=$(cat /tmp/ami_eu-north-1.txt)"    >> "$GITHUB_ENV"
+          echo "AP_SOUTHEAST_2_AMI=$(cat /tmp/ami_ap-southeast-2.txt)" >> "$GITHUB_ENV"
+          echo "CA_CENTRAL_1_AMI=$(cat /tmp/ami_ca-central-1.txt)" >> "$GITHUB_ENV"
+          echo "EU_WEST_3_AMI=$(cat /tmp/ami_eu-west-3.txt)"      >> "$GITHUB_ENV"
+
+      - name: Wait for AMIs to be available in all regions
+        run: |
+          wait_for_ami() {
+            local region=$1
+            local ami_id=$2
+            echo "Waiting for ${ami_id} in ${region}..."
+            aws ec2 wait image-available --image-ids "${ami_id}" --region "${region}"
+            echo "${ami_id} in ${region} is available"
+          }
+
+          wait_for_ami eu-west-2      "${EU_WEST_2_AMI}"      &
+          wait_for_ami eu-north-1     "${EU_NORTH_1_AMI}"     &
+          wait_for_ami ap-southeast-2 "${AP_SOUTHEAST_2_AMI}" &
+          wait_for_ami ca-central-1   "${CA_CENTRAL_1_AMI}"   &
+          wait_for_ami eu-west-3      "${EU_WEST_3_AMI}"      &
+          wait
+
+      - name: Update SSM in all other regions
+        run: |
+          update_ssm() {
+            local region=$1
+            local ami_id=$2
+            aws ssm put-parameter \
+              --name /vpn-wireguard/WIREGUARD_IMAGE \
+              --value "${ami_id}" \
+              --type String \
+              --overwrite \
+              --region "${region}"
+            echo "Updated SSM in ${region}: ${ami_id}"
+          }
+
+          update_ssm eu-west-2      "${EU_WEST_2_AMI}"
+          update_ssm eu-north-1     "${EU_NORTH_1_AMI}"
+          update_ssm ap-southeast-2 "${AP_SOUTHEAST_2_AMI}"
+          update_ssm ca-central-1   "${CA_CENTRAL_1_AMI}"
+          update_ssm eu-west-3      "${EU_WEST_3_AMI}"

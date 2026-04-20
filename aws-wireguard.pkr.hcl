@@ -13,7 +13,10 @@ locals {
 
 data "amazon-ami" "amazon-linux" {
   filters = {
-    name = "*al2023-ami-2023*"
+    name                = "al2023-ami-2023*-arm64"
+    architecture        = "arm64"
+    root-device-type    = "ebs"
+    virtualization-type = "hvm"
   }
   owners      = ["amazon"]
   most_recent = true
@@ -56,5 +59,10 @@ build {
     ]
     inline  = ["sudo -E /tmp/provisioning-scripts/install-wireguard.sh"]
     timeout = "5m"
+  }
+
+  post-processor "manifest" {
+    output     = "manifest.json"
+    strip_path = true
   }
 }
