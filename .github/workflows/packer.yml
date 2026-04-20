@@ -7,7 +7,7 @@ on:
 
 env:
   PRODUCT_VERSION: "latest"
-  PRIMARY_REGION: us-east-1
+  PRIMARY_REGION: eu-west-1
 
 jobs:
   build-and-distribute:
@@ -25,13 +25,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.PRIMARY_REGION }}
 
-      - name: Whitelist GitHub Actions IP on build security group
-        run: |
-          MY_PUBLIC_IP=$(curl -sf https://checkip.amazonaws.com)
-          aws ec2 modify-security-group-rules \
-            --group-id ${{ vars.SECURITY_GROUP_ID }} \
-            --security-group-rules "SecurityGroupRuleId=${{ vars.SECURITY_GROUP_RULE_ID }},SecurityGroupRule={CidrIpv4=${MY_PUBLIC_IP}/32,Description=GHAction,IpProtocol=tcp,ToPort=22,FromPort=22}"
-
       - name: Setup packer
         uses: hashicorp/setup-packer@main
         with:
@@ -43,9 +36,6 @@ jobs:
       - name: Packer validate
         run: |
           packer validate \
-            -var vpc_id=${{ vars.VPC_ID }} \
-            -var subnet_id=${{ vars.SUBNET_ID }} \
-            -var security_group_id=${{ vars.SECURITY_GROUP_ID }} \
             -var server_private_key='${{ secrets.SERVER_PRIVATE_KEY }}' \
             -var server_public_key='${{ secrets.SERVER_PUBLIC_KEY }}' \
             -var client_public_key='${{ secrets.CLIENT_PUBLIC_KEY }}' \
@@ -55,9 +45,6 @@ jobs:
       - name: Packer build
         run: |
           packer build \
-            -var vpc_id=${{ vars.VPC_ID }} \
-            -var subnet_id=${{ vars.SUBNET_ID }} \
-            -var security_group_id=${{ vars.SECURITY_GROUP_ID }} \
             -var server_private_key='${{ secrets.SERVER_PRIVATE_KEY }}' \
             -var server_public_key='${{ secrets.SERVER_PUBLIC_KEY }}' \
             -var client_public_key='${{ secrets.CLIENT_PUBLIC_KEY }}' \
@@ -95,6 +82,7 @@ jobs:
             echo "Copying to ${region}: ${ami_id}"
           }
 
+          copy_ami us-east-1      &
           copy_ami eu-west-2      &
           copy_ami eu-north-1     &
           copy_ami ap-southeast-2 &
@@ -102,11 +90,12 @@ jobs:
           copy_ami eu-west-3      &
           wait
 
-          echo "EU_WEST_2_AMI=$(cat /tmp/ami_eu-west-2.txt)"      >> "$GITHUB_ENV"
-          echo "EU_NORTH_1_AMI=$(cat /tmp/ami_eu-north-1.txt)"    >> "$GITHUB_ENV"
+          echo "US_EAST_1_AMI=$(cat /tmp/ami_us-east-1.txt)"         >> "$GITHUB_ENV"
+          echo "EU_WEST_2_AMI=$(cat /tmp/ami_eu-west-2.txt)"         >> "$GITHUB_ENV"
+          echo "EU_NORTH_1_AMI=$(cat /tmp/ami_eu-north-1.txt)"       >> "$GITHUB_ENV"
           echo "AP_SOUTHEAST_2_AMI=$(cat /tmp/ami_ap-southeast-2.txt)" >> "$GITHUB_ENV"
-          echo "CA_CENTRAL_1_AMI=$(cat /tmp/ami_ca-central-1.txt)" >> "$GITHUB_ENV"
-          echo "EU_WEST_3_AMI=$(cat /tmp/ami_eu-west-3.txt)"      >> "$GITHUB_ENV"
+          echo "CA_CENTRAL_1_AMI=$(cat /tmp/ami_ca-central-1.txt)"   >> "$GITHUB_ENV"
+          echo "EU_WEST_3_AMI=$(cat /tmp/ami_eu-west-3.txt)"         >> "$GITHUB_ENV"
 
       - name: Wait for AMIs to be available in all regions
         run: |
@@ -118,6 +107,7 @@ jobs:
             echo "${ami_id} in ${region} is available"
           }
 
+          wait_for_ami us-east-1      "${US_EAST_1_AMI}"      &
           wait_for_ami eu-west-2      "${EU_WEST_2_AMI}"      &
           wait_for_ami eu-north-1     "${EU_NORTH_1_AMI}"     &
           wait_for_ami ap-southeast-2 "${AP_SOUTHEAST_2_AMI}" &
@@ -139,6 +129,7 @@ jobs:
             echo "Updated SSM in ${region}: ${ami_id}"
           }
 
+          update_ssm us-east-1      "${US_EAST_1_AMI}"
           update_ssm eu-west-2      "${EU_WEST_2_AMI}"
           update_ssm eu-north-1     "${EU_NORTH_1_AMI}"
           update_ssm ap-southeast-2 "${AP_SOUTHEAST_2_AMI}"

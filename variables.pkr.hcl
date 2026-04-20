@@ -20,17 +20,5 @@ variable "instance_type" {
 
 variable "region" {
   type    = string
-  default = "us-east-1"
-}
-
-variable "vpc_id" {
-  type = string
-}
-
-variable "subnet_id" {
-  type = string
-}
-
-variable "security_group_id" {
-  type = string
+  default = "eu-west-1"
 }

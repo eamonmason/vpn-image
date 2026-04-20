@@ -24,15 +24,13 @@ data "amazon-ami" "amazon-linux" {
 
 
 source "amazon-ebs" "al" {
-  ami_name                    = "wireguard-server-${local.packerstarttime}"
-  instance_type               = "${var.instance_type}"
-  region                      = "${var.region}"
-  source_ami                  = data.amazon-ami.amazon-linux.id
-  ssh_username                = "ec2-user"
-  vpc_id                      = "${var.vpc_id}"
-  subnet_id                   = "${var.subnet_id}"
-  security_group_ids          = ["${var.security_group_id}"]
-  associate_public_ip_address = "true"
+  ami_name                                  = "wireguard-server-${local.packerstarttime}"
+  instance_type                             = "${var.instance_type}"
+  region                                    = "${var.region}"
+  source_ami                                = data.amazon-ami.amazon-linux.id
+  ssh_username                              = "ec2-user"
+  associate_public_ip_address               = true
+  temporary_security_group_source_public_ip = true
 }
 
 
