@@ -4,7 +4,7 @@ echo "Installing Wireguard"
 
 yum -y update
 # sudo apt-get install -y wireguard iptables openresolv
-yum -y install wireguard-tools nftables
+yum -y install wireguard-tools nftables iproute-tc
 
 # Copy keys for Wireguard
 
