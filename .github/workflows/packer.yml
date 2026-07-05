@@ -36,18 +36,12 @@ jobs:
       - name: Packer validate
         run: |
           packer validate \
-            -var server_private_key='${{ secrets.SERVER_PRIVATE_KEY }}' \
-            -var server_public_key='${{ secrets.SERVER_PUBLIC_KEY }}' \
-            -var client_public_key='${{ secrets.CLIENT_PUBLIC_KEY }}' \
             -var region=${{ env.PRIMARY_REGION }} \
             .
 
       - name: Packer build
         run: |
           packer build \
-            -var server_private_key='${{ secrets.SERVER_PRIVATE_KEY }}' \
-            -var server_public_key='${{ secrets.SERVER_PUBLIC_KEY }}' \
-            -var client_public_key='${{ secrets.CLIENT_PUBLIC_KEY }}' \
             -var region=${{ env.PRIMARY_REGION }} \
             -color=false -on-error=abort .
         env:

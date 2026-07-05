@@ -45,17 +45,12 @@ build {
   }
 
   provisioner "file" {
-    sources     = ["scripts/install-wireguard.sh", "scripts/wg0.conf"]
+    sources     = ["scripts/install-wireguard.sh", "scripts/wg0.conf.template", "scripts/render-wg0.sh"]
     destination = "/tmp/provisioning-scripts/"
   }
 
   provisioner "shell" {
-    environment_vars = [
-      "SERVER_PRIVATE_KEY=${var.server_private_key}",
-      "SERVER_PUBLIC_KEY=${var.server_public_key}",
-      "CLIENT_PUBLIC_KEY=${var.client_public_key}"
-    ]
-    inline  = ["sudo -E /tmp/provisioning-scripts/install-wireguard.sh"]
+    inline  = ["sudo /tmp/provisioning-scripts/install-wireguard.sh"]
     timeout = "5m"
   }
 
