@@ -5,14 +5,13 @@ echo "Installing Wireguard"
 yum -y update
 yum -y install wireguard-tools nftables
 
-echo ${SERVER_PRIVATE_KEY} > /etc/wireguard/privatekey
-echo ${SERVER_PUBLIC_KEY} > /etc/wireguard/publickey
-
+# No keys are baked into the AMI. EC2 user-data runs render-wg0.sh at boot to
+# fetch keys from SSM, render /etc/wireguard/wg0.conf and start wg-quick@wg0,
+# so the service is deliberately not enabled here.
+mkdir -p /opt/wireguard
 cd /tmp/provisioning-scripts
-
-cat wg0.conf | sed "s|SERVER_PRIVATE_KEY|${SERVER_PRIVATE_KEY}|" \
-| sed "s|CLIENT_PUBLIC_KEY|${CLIENT_PUBLIC_KEY}|" \
-> /etc/wireguard/wg0.conf
+install -m 644 wg0.conf.template /opt/wireguard/wg0.conf.template
+install -m 755 render-wg0.sh /opt/wireguard/render-wg0.sh
 
 modprobe tcp_bbr || true
 
@@ -32,7 +31,5 @@ net.core.wmem_default = 262144
 net.core.netdev_max_backlog = 10000
 EOT
 sysctl --system
-
-systemctl enable wg-quick@wg0
 
 cd /tmp && rm -rf provisioning-scripts

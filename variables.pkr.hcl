@@ -1,18 +1,3 @@
-variable "server_private_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "server_public_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "client_public_key" {
-  type      = string
-  sensitive = true
-}
-
 variable "instance_type" {
   type    = string
   default = "t4g.small"
