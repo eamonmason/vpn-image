@@ -42,9 +42,11 @@ Resources:
             Statement:
               # Packer amazon-ebs builder's documented minimum permissions
               # (minus Windows-only GetPasswordData), plus DescribeVpcs for the
-              # default-VPC temporary security group and CopyImage for the
-              # cross-region copies. EC2 actions can't be meaningfully scoped
-              # by ARN, so they are restricted to the regions the workflow uses.
+              # default-VPC temporary security group, DescribeInstanceTypeOfferings
+              # so Packer picks a subnet/AZ that offers the instance type, and
+              # CopyImage for the cross-region copies. EC2 actions can't be
+              # meaningfully scoped by ARN, so they are restricted to the
+              # regions the workflow uses.
               - Sid: PackerEc2
                 Effect: Allow
                 Action:
@@ -66,6 +68,7 @@ Resources:
                   - ec2:DescribeImages
                   - ec2:DescribeInstances
                   - ec2:DescribeInstanceStatus
+                  - ec2:DescribeInstanceTypeOfferings
                   - ec2:DescribeRegions
                   - ec2:DescribeSecurityGroups
                   - ec2:DescribeSnapshots
