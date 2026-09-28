@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  IAM role assumed by the vpn-image packer GitHub Actions workflow via GitHub
+  OIDC, so no AWS access keys are stored in GitHub. Reuses the account's
+  existing token.actions.githubusercontent.com OIDC provider (an account can
+  only have one per URL); this stack does not create it.
+
+Parameters:
+  GitHubRepo:
+    Type: String
+    Default: eamonmason/vpn-image
+    Description: owner/repo allowed to assume the role.
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: Only workflow runs on this branch can assume the role.
+
+Resources:
+  PackerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: vpn-image-packer
+      Description: Assumed by the vpn-image packer workflow via GitHub OIDC.
+      # Build + copy to 6 regions + wait for availability can exceed the
+      # default 1h session.
+      MaxSessionDuration: 7200
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepo}:ref:refs/heads/${GitHubBranch}
+      Policies:
+        - PolicyName: packer-build-and-distribute
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Packer amazon-ebs builder's documented minimum permissions
+              # (minus Windows-only GetPasswordData), plus DescribeVpcs for the
+              # default-VPC temporary security group and CopyImage for the
+              # cross-region copies. EC2 actions can't be meaningfully scoped
+              # by ARN, so they are restricted to the regions the workflow uses.
+              - Sid: PackerEc2
+                Effect: Allow
+                Action:
+                  - ec2:AttachVolume
+                  - ec2:AuthorizeSecurityGroupIngress
+                  - ec2:CopyImage
+                  - ec2:CreateImage
+                  - ec2:CreateKeyPair
+                  - ec2:CreateSecurityGroup
+                  - ec2:CreateSnapshot
+                  - ec2:CreateTags
+                  - ec2:CreateVolume
+                  - ec2:DeleteKeyPair
+                  - ec2:DeleteSecurityGroup
+                  - ec2:DeleteSnapshot
+                  - ec2:DeleteVolume
+                  - ec2:DeregisterImage
+                  - ec2:DescribeImageAttribute
+                  - ec2:DescribeImages
+                  - ec2:DescribeInstances
+                  - ec2:DescribeInstanceStatus
+                  - ec2:DescribeRegions
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeSnapshots
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeTags
+                  - ec2:DescribeVolumes
+                  - ec2:DescribeVpcs
+                  - ec2:DetachVolume
+                  - ec2:ModifyImageAttribute
+                  - ec2:ModifyInstanceAttribute
+                  - ec2:ModifySnapshotAttribute
+                  - ec2:RegisterImage
+                  - ec2:RunInstances
+                  - ec2:StopInstances
+                  - ec2:TerminateInstances
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion:
+                      - eu-west-1
+                      - us-east-1
+                      - eu-west-2
+                      - eu-north-1
+                      - ap-southeast-2
+                      - ca-central-1
+                      - eu-west-3
+              - Sid: PublishAmiId
+                Effect: Allow
+                Action: ssm:PutParameter
+                Resource: !Sub arn:aws:ssm:*:${AWS::AccountId}:parameter/vpn-wireguard/WIREGUARD_IMAGE
+
+Outputs:
+  RoleArn:
+    Description: Set as the AWS_ROLE_ARN repository variable in GitHub.
+    Value: !GetAtt PackerRole.Arn
